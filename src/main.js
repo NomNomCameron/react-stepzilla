@@ -122,12 +122,13 @@ export default class StepZilla extends Component {
 
   // this utility method lets Child components invoke a direct jump to another step
   jumpToStep(evt) {
+    const _value = evt.target.value || parseInt(evt.target.getAttribute("value"));
     if (evt.target == undefined) {
       // a child step wants to invoke a jump between steps. in this case 'evt' is the numeric step number and not the JS event
       this.setNavState(evt);
     }
     else { // the main navigation step ui is invoking a jump between steps
-      if (!this.props.stepsNavigation || evt.target.value === this.state.compState) { // if stepsNavigation is turned off or user clicked on existing step again (on step 2 and clicked on 2 again) then ignore
+      if (!this.props.stepsNavigation || _value === this.state.compState) { // if stepsNavigation is turned off or user clicked on existing step again (on step 2 and clicked on 2 again) then ignore
         evt.preventDefault();
         evt.stopPropagation();
 
@@ -136,7 +137,7 @@ export default class StepZilla extends Component {
 
       evt.persist(); // evt is a react event so we need to persist it as we deal with aync promises which nullifies these events (https://facebook.github.io/react/docs/events.html#event-pooling)
 
-      const movingBack = evt.target.value < this.state.compState; // are we trying to move back or front?
+      const movingBack = _value < this.state.compState; // are we trying to move back or front?
       let passThroughStepsNotValid = false; // if we are jumping forward, only allow that if inbetween steps are all validated. This flag informs the logic...
       let proceed = false; // flag on if we should move on
 
@@ -153,7 +154,7 @@ export default class StepZilla extends Component {
               // looks like we are moving forward, 'reduce' a new array of step>validated values we need to check and 'some' that to get a decision on if we should allow moving forward
               passThroughStepsNotValid = this.props.steps
                 .reduce((a, c, i) => {
-                  if (i >= this.state.compState && i < evt.target.value) {
+                  if (i >= this.state.compState && i < _value) {
                     a.push(c.validated);
                   }
                   return a;
@@ -173,12 +174,12 @@ export default class StepZilla extends Component {
         .then(() => {
           // this is like finally(), executes if error no no error
           if (proceed && !passThroughStepsNotValid) {
-            if (evt.target.value === (this.props.steps.length - 1) &&
+            if (_value === (this.props.steps.length - 1) &&
               this.state.compState === (this.props.steps.length - 1)) {
                 this.setNavState(this.props.steps.length);
             }
             else {
-              this.setNavState(evt.target.value);
+              this.setNavState(_value);
             }
           }
         })
@@ -248,11 +249,17 @@ export default class StepZilla extends Component {
       }
       else if (Object.keys(this.refs).length == 0 || typeof this.refs.activeComponent.isValidated == 'undefined') {
         // if its a form component, it should have implemeted a public isValidated class (also pure componenets wont even have refs - i.e. a empty object). If not then continue
-        proceed = true;
+
+        if (this.activeComponent) {
+          proceed = this.activeComponent.isValidated();
+        } else {
+          proceed = true;
+        }
       }
       else {
         // user is moving forward in steps, invoke validation as its available
-        proceed = this.refs.activeComponent.isValidated();
+        const component = this.refs.activeComponent || this.activeComponent
+        proceed = component.isValidated();
       }
     }
 
@@ -283,7 +290,7 @@ export default class StepZilla extends Component {
   renderSteps() {
     return this.props.steps.map((s, i)=> (
       <li className={this.getClassName("progtrckr", i)} onClick={(evt) => {this.jumpToStep(evt)}} key={i} value={i}>
-          <em>{i+1}</em>
+          <em><i value={i} onClick={(evt) => {this.jumpToStep(evt)}} className={`fa ${this.props.stepIcons[i] || "fa-info-circle"}`}></i></em>
           <span>{this.props.steps[i].name}</span>
       </li>
     ));
@@ -298,7 +305,8 @@ export default class StepZilla extends Component {
     let cloneExtensions = {
       jumpToStep: (t) => {
         this.jumpToStep(t);
-      }
+      },
+      ref: ((el) => this.activeComponent = el)
     };
 
     const componentPointer = this.props.steps[this.state.compState].component;
